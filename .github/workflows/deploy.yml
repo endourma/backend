@@ -21,7 +21,7 @@ jobs:
           umask 177
           cat > ~/.ssh/key.pem << 'EOF'
           ${{ secrets.SSH_PRIVATE_KEY }}
-EOF
+          EOF
           chmod 600 ~/.ssh/key.pem
           ssh-keygen -y -f ~/.ssh/key.pem >/dev/null
 
