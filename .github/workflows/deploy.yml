@@ -10,34 +10,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH Key
+      - name: Setup SSH key
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
-          umask 177
-          cat > ~/.ssh/key.pem << 'EOF'
-          ${{ secrets.SSH_PRIVATE_KEY }}
-          EOF
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/key.pem
           chmod 600 ~/.ssh/key.pem
+
           ssh-keygen -y -f ~/.ssh/key.pem >/dev/null
 
-      - name: Deploy to VM
+      - name: Sync files to VM
         run: |
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/key.pem -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" \
+            -e "ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no" \
             ./ \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:~/backend
 
-      - name: Restart Application
+      - name: Deploy & restart PM2
         run: |
-          ssh -i ~/.ssh/key.pem -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
-          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} '
-            cd ~/backend &&
-            npm install &&
-            pm2 restart backend || pm2 start server.js --name backend &&
+          ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+
+            set -e
+
+            cd ~/backend
+
+            # assurer que node/npm sont accessibles
+            export PATH=$PATH:/usr/bin:/usr/local/bin
+
+            # si node installé via nvm (safe fallback)
+            export NVM_DIR="$HOME/.nvm"
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+            fi
+
+            npm install
+
+            pm2 describe backend > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+              pm2 restart backend
+            else
+              pm2 start server.js --name backend
+            fi
+
             pm2 save
-          '
+
+          EOF
