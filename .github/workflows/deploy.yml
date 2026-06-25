@@ -48,7 +48,7 @@ jobs:
               . "$NVM_DIR/nvm.sh"
             fi
 
-            npm install
+            npm install --no-audit --no-fund
 
             pm2 describe backend > /dev/null 2>&1
             if [ $? -eq 0 ]; then
