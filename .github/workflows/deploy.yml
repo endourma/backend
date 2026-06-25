@@ -14,21 +14,27 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup SSH Key
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          printf "%s" "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/key.pem
+          umask 177
+          cat > ~/.ssh/key.pem << 'EOF'
+${{ secrets.SSH_PRIVATE_KEY }}
+EOF
           chmod 600 ~/.ssh/key.pem
+          ssh-keygen -y -f ~/.ssh/key.pem >/dev/null
 
       - name: Deploy to VM
         run: |
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no" \
+            -e "ssh -i ~/.ssh/key.pem -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" \
             ./ \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:~/backend
 
       - name: Restart Application
         run: |
-          ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no \
+          ssh -i ~/.ssh/key.pem -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
           ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} '
             cd ~/backend &&
             npm install &&
