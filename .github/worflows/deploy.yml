@@ -1,0 +1,37 @@
+name: Deploy Express Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/key.pem
+          chmod 600 ~/.ssh/key.pem
+
+      - name: Deploy to VM
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no" \
+            ./ \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:~/backend
+
+      - name: Restart Application
+        run: |
+          ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} '
+            cd ~/backend &&
+            npm install &&
+            pm2 restart backend || pm2 start server.js --name backend &&
+            pm2 save
+          '
